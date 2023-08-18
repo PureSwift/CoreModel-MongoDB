@@ -25,8 +25,8 @@ extension MongoDatabase: ModelStorage {
     public func count(_ fetchRequest: FetchRequest) async throws -> UInt {
         let entityName = fetchRequest.entity
         let collection = self.collection(entityName)
-        let filter: BSONDocument = [:]
-        let options: CountDocumentsOptions? = nil
+        let filter = fetchRequest.predicate.map { BSONDocument(filter: $0) } ?? [:]
+        let options = CountDocumentsOptions(fetchRequest: fetchRequest)
         let count = try await collection.countDocuments(filter, options: options)
         return UInt(count)
     }
@@ -79,7 +79,9 @@ internal extension MongoDatabase {
     ) async throws -> BSONDocument? {
         let collection = self.collection(entityName, options: options)
         let options: FindOneOptions? = nil
-        let filter: BSONDocument = [BSONDocument.BuiltInProperty.id.rawValue: .string(id.rawValue)]
+        let filter: BSONDocument = [
+            BSONDocument.BuiltInProperty.id.rawValue: .string(id.rawValue)
+        ]
         return try await collection.findOne(filter, options: options)
     }
     
@@ -89,8 +91,8 @@ internal extension MongoDatabase {
     ) async throws -> [BSONDocument] {
         let entityName = fetchRequest.entity
         let collection = self.collection(entityName, options: options)
-        let options: FindOptions? = nil
-        let filter: BSONDocument = .init() // TODO: Filter
+        let filter = fetchRequest.predicate.map { BSONDocument(filter: $0) } ?? [:]
+        let options = FindOptions(fetchRequest: fetchRequest)
         let stream = try await collection.find(filter, options: options)
         var results = [BSONDocument]()
         for try await document in stream {
