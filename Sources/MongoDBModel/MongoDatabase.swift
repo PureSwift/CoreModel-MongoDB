@@ -2,10 +2,61 @@ import Foundation
 @_exported import CoreModel
 @_exported import MongoSwift
 
-extension MongoDatabase {
+public actor MongoModelStorage: ModelStorage {
+    
+    public let database: MongoDatabase
+    
+    public let model: Model
+    
+    public init(database: MongoDatabase, model: Model) {
+        self.database = database
+        self.model = model
+    }
     
     /// Fetch managed object.
-    public func fetch(
+    public func fetch(_ entityName: EntityName, for id: ObjectID) async throws -> ModelData? {
+        let entity = try model(for: entityName)
+        return try await database.fetch(entity, for: id)
+    }
+    
+    /// Fetch managed objects.
+    public func fetch(_ fetchRequest: FetchRequest) async throws -> [ModelData] {
+        let entity = try model(for: fetchRequest.entity)
+        return try await database.fetch(fetchRequest, entity: entity)
+    }
+    
+    /// Fetch and return result count.
+    public func count(_ fetchRequest: FetchRequest) async throws -> UInt {
+        try await database.count(fetchRequest)
+    }
+    
+    /// Create or edit a managed object.
+    public func insert(_ value: ModelData) async throws {
+        try await database.insert(value)
+    }
+    
+    /// Create or edit multiple managed objects.
+    public func insert(_ values: [ModelData]) async throws {
+        try await database.insert(values)
+    }
+    
+    /// Delete the specified managed object.
+    public func delete(_ entity: EntityName, for id: ObjectID) async throws {
+        try await database.delete(entity, for: id)
+    }
+    
+    private func model(for entityName: EntityName) throws -> EntityDescription {
+        guard let entity = self.model.entities.first(where: { $0.id == entityName }) else {
+            throw CoreModelError.invalidEntity(entityName)
+        }
+        return entity
+    }
+}
+
+public extension MongoDatabase {
+    
+    /// Fetch managed object.
+    func fetch(
         _ entity: EntityDescription,
         for id: ObjectID
     ) async throws -> ModelData? {
@@ -16,7 +67,7 @@ extension MongoDatabase {
     }
     
     /// Fetch managed objects.
-    public func fetch(
+    func fetch(
         _ fetchRequest: FetchRequest,
         entity: EntityDescription
     ) async throws -> [ModelData] {
@@ -25,7 +76,7 @@ extension MongoDatabase {
     }
     
     /// Fetch and return result count.
-    public func count(_ fetchRequest: FetchRequest) async throws -> UInt {
+    func count(_ fetchRequest: FetchRequest) async throws -> UInt {
         let entityName = fetchRequest.entity
         let collection = self.collection(entityName)
         let filter = fetchRequest.predicate.map { BSONDocument(filter: $0) } ?? [:]
@@ -35,14 +86,14 @@ extension MongoDatabase {
     }
     
     /// Create or edit a managed object.
-    public func insert(_ value: ModelData) async throws {
+    func insert(_ value: ModelData) async throws {
         let entityName = value.entity
         let collection = self.collection(entityName)
         let document = BSONDocument(model: value)
         try await collection.insertOne(document)
     }
     
-    public func insert(_ values: [ModelData]) async throws {
+    func insert(_ values: [ModelData]) async throws {
         var collections = [EntityName: [ModelData]]()
         for value in values {
             collections[value.entity, default: []].append(value)
@@ -55,7 +106,7 @@ extension MongoDatabase {
     }
     
     /// Delete the specified managed object.
-    public func delete(
+    func delete(
         _ entity: EntityName,
         for id: ObjectID
     ) async throws {
@@ -66,11 +117,6 @@ extension MongoDatabase {
         ]
         try await collection.deleteOne(filter, options: options)
     }
-}
-
-public extension MongoDatabase {
-    
-    
 }
 
 internal extension MongoDatabase {
