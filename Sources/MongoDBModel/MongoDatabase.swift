@@ -198,7 +198,7 @@ internal extension MongoDatabase {
     }
 }
 
-fileprivate extension MongoDatabase {
+private extension MongoDatabase {
     
     func collection(
         _ name: EntityName,
