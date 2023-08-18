@@ -2,13 +2,16 @@ import Foundation
 @_exported import CoreModel
 @_exported import MongoSwift
 
-public actor MongoModelStorage: ModelStorage {
+public struct MongoModelStorage: ModelStorage {
     
     public let database: MongoDatabase
     
     public let model: Model
     
-    public init(database: MongoDatabase, model: Model) {
+    public init(
+        database: MongoDatabase,
+        model: Model
+    ) {
         self.database = database
         self.model = model
     }
