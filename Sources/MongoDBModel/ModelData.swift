@@ -11,8 +11,26 @@ import MongoSwift
 
 public extension ModelData {
     
-    init(bson: BSONDocument) {
-        fatalError()
+    init(bson: BSONDocument, model: EntityDescription) throws {
+        let id = try bson.modelObjectID
+        self.init(entity: model.id, id: id)
+        // decode attributes
+        for attribute in model.attributes {
+            let value = bson[attribute.id.rawValue]
+                .map { AttributeValue(bson: $0) } ?? .null
+            self.attributes[attribute.id] = value
+        }
+        // decode relationships
+        for relationship in model.relationships {
+            let relationshipBSON = bson[relationship.id.rawValue] ?? .null
+            guard let value = RelationshipValue(
+                bson: relationshipBSON,
+                type: relationship.type
+            ) else {
+                throw DecodingError.typeMismatch(ModelData.self, DecodingError.Context(codingPath: [], debugDescription: ""))
+            }
+            self.relationships[relationship.id] = value
+        }
     }
 }
 

@@ -11,8 +11,31 @@ import MongoSwift
 
 public extension RelationshipValue {
     
-    init?(bson: BSON) {
-        fatalError()
+    init?(bson: BSON, type: RelationshipType) {
+        guard bson != .null else {
+            self = .null
+            return
+        }
+        switch type {
+        case .toOne:
+            guard let objectID = ObjectID(bson: bson) else {
+                return nil
+            }
+            self = .toOne(objectID)
+        case .toMany:
+            guard case let .array(array) = bson else {
+                return nil
+            }
+            var objectIDs = [ObjectID]()
+            objectIDs.reserveCapacity(array.count)
+            for item in array {
+                guard let objectID = ObjectID(bson: item) else {
+                    return nil
+                }
+                objectIDs.append(objectID)
+            }
+            self = .toMany(objectIDs)
+        }
     }
 }
 

@@ -2,23 +2,26 @@ import Foundation
 @_exported import CoreModel
 @_exported import MongoSwift
 
-extension MongoDatabase: ModelStorage {
+extension MongoDatabase {
     
     /// Fetch managed object.
     public func fetch(
-        _ entity: EntityName,
+        _ entity: EntityDescription,
         for id: ObjectID
     ) async throws -> ModelData? {
-        guard let document = try await find(entity, for: id) else {
+        guard let document = try await find(entity.id, for: id) else {
             return nil
         }
-        return ModelData(bson: document)
+        return try ModelData(bson: document, model: entity)
     }
     
     /// Fetch managed objects.
-    public func fetch(_ fetchRequest: FetchRequest) async throws -> [ModelData] {
+    public func fetch(
+        _ fetchRequest: FetchRequest,
+        entity: EntityDescription
+    ) async throws -> [ModelData] {
         try await fetchDocuments(fetchRequest)
-            .map { ModelData(bson: $0) }
+            .map { try ModelData(bson: $0, model: entity) }
     }
     
     /// Fetch and return result count.
