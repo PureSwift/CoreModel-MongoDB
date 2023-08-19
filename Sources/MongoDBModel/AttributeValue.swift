@@ -9,64 +9,57 @@ import Foundation
 import CoreModel
 import MongoSwift
 
-public extension AttributeValue {
+internal extension AttributeValue {
     
-    init?(bson: BSON) {
-        switch bson {
-        case .document:
-            return nil
-        case .int32(let value):
+    init?(bson: BSON, type: AttributeType) {
+        switch (type, bson) {
+        case (.int16, .int32(let value)):
+            self = .int16(numericCast(value))
+        case (.int16, .int64(let value)):
+            self = .int16(numericCast(value))
+        case (.int32, .int32(let value)):
             self = .int32(value)
-        case .int64(let value):
+        case (.int32, .int64(let value)):
+            self = .int32(numericCast(value))
+        case (.int64, .int64(let value)):
             self = .int64(value)
-        case .decimal128:
-            return nil
-        case .array:
-            return nil
-        case .bool(let value):
+        case (.int64, .int32(let value)):
+            self = .int64(numericCast(value))
+        case (.boolean, .bool(let value)):
             self = .bool(value)
-        case .datetime(let date):
+        case (.date, .datetime(let date)):
             self = .date(date)
-        case .double(let double):
+        case (.date, .timestamp(let timestamp)):
+            self = .date(Date(timeIntervalSince1970: TimeInterval(timestamp.timestamp)))
+        case (.double, .double(let double)):
             self = .double(double)
-        case .string(let string):
+        case (.float, .double(let double)):
+            self = .float(Float(double))
+        case (.string, .string(let string)):
             self = .string(string)
-        case .symbol:
-            return nil
-        case .timestamp:
-            return nil
-        case .binary(let binary):
-            switch binary.subtype {
-            case .generic:
-                let data = binary.data.withUnsafeReadableBytes { buffer in
-                    Data(buffer)
-                }
-                self = .data(data)
-            case .uuid:
-                guard let uuid = try? binary.toUUID() else {
-                    return nil
-                }
-                self = .uuid(uuid)
-            default:
+        case (.data, .binary(let binary)):
+            let data = binary.data.withUnsafeReadableBytes { buffer in
+                Data(buffer)
+            }
+            self = .data(data)
+        case (.uuid, .binary(let binary)):
+            guard let uuid = try? binary.toUUID() else {
                 return nil
             }
-        case .regex:
-            return nil
-        case .objectID:
-            return nil
-        case .dbPointer:
-            return nil
-        case .code:
-            return nil
-        case .codeWithScope:
-            return nil
-        case .null:
+            self = .uuid(uuid)
+        case (.uuid, .string(let string)):
+            guard let uuid = UUID(uuidString: string) else {
+                return nil
+            }
+            self = .uuid(uuid)
+        case (.url, .string(let string)):
+            guard let url = URL(string: string) else {
+                return nil
+            }
+            self = .url(url)
+        case (_, .null):
             self = .null
-        case .undefined:
-            return nil
-        case .minKey:
-            return nil
-        case .maxKey:
+        default:
             return nil
         }
     }

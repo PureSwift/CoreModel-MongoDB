@@ -16,18 +16,17 @@ public extension ModelData {
         self.init(entity: model.id, id: id)
         // decode attributes
         for attribute in model.attributes {
-            let value = bson[attribute.id.rawValue]
-                .map { AttributeValue(bson: $0) } ?? .null
+            let attributeBSON = (bson[attribute.id.rawValue] ?? .null)
+            guard let value = AttributeValue(bson: attributeBSON, type: attribute.type) else {
+                throw DecodingError.typeMismatch(ModelData.self, DecodingError.Context(codingPath: [], debugDescription: "Unable to decode \(attribute.type) attribute \"\(attribute.id)\" from \(attributeBSON)"))
+            }
             self.attributes[attribute.id] = value
         }
         // decode relationships
         for relationship in model.relationships {
             let relationshipBSON = bson[relationship.id.rawValue] ?? .null
-            guard let value = RelationshipValue(
-                bson: relationshipBSON,
-                type: relationship.type
-            ) else {
-                throw DecodingError.typeMismatch(ModelData.self, DecodingError.Context(codingPath: [], debugDescription: ""))
+            guard let value = RelationshipValue(bson: relationshipBSON, type: relationship.type) else {
+                throw DecodingError.typeMismatch(ModelData.self, DecodingError.Context(codingPath: [], debugDescription: "Unable to decode \(relationship.type) relationship \"\(relationship.id)\" from \(relationshipBSON)"))
             }
             self.relationships[relationship.id] = value
         }
