@@ -35,13 +35,19 @@ public extension ModelData {
 
 public extension BSONDocument {
     
-    init(model: ModelData) {
+    init(model: ModelData) throws {
         self.init()
         // set id
         self[BSONDocument.BuiltInProperty.id.rawValue] = .string(model.id.rawValue)
         // set attributes
         for (key, attribute) in model.attributes {
-            self[key.rawValue] = BSON(attributeValue: attribute)
+            let attributeBSON: BSON
+            do {
+                attributeBSON = try BSON(attributeValue: attribute)
+            } catch {
+                throw DecodingError.dataCorrupted(DecodingError.Context(codingPath: [], debugDescription: "Unable to decode \(attribute) for \(key)", underlyingError: error))
+            }
+            self[key.rawValue] = attributeBSON
         }
         // set relationships
         for (key, relationship) in model.relationships {

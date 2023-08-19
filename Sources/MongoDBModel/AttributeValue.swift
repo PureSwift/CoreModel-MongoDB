@@ -25,7 +25,7 @@ internal extension AttributeValue {
             self = .int64(value)
         case (.int64, .int32(let value)):
             self = .int64(numericCast(value))
-        case (.boolean, .bool(let value)):
+        case (.bool, .bool(let value)):
             self = .bool(value)
         case (.date, .datetime(let date)):
             self = .date(date)
@@ -57,6 +57,11 @@ internal extension AttributeValue {
                 return nil
             }
             self = .url(url)
+        case (.decimal, .decimal128(let decimal128)):
+            guard let decimal = Decimal(string: decimal128.description) else {
+                return nil
+            }
+            self = .decimal(decimal)
         case (_, .null):
             self = .null
         default:
@@ -67,18 +72,18 @@ internal extension AttributeValue {
 
 public extension BSON {
     
-    init(attributeValue: AttributeValue) {
+    init(attributeValue: AttributeValue) throws {
         switch attributeValue {
         case .null:
             self = .null
         case .string(let string):
             self = .string(string)
         case .uuid(let uuid):
-            self = .binary(try! BSONBinary(from: uuid))
+            self = .binary(try BSONBinary(from: uuid))
         case .url(let url):
             self = .string(url.absoluteString)
         case .data(let data):
-            self = .binary(try! .init(data: data, subtype: .generic))
+            self = .binary(try .init(data: data, subtype: .generic))
         case .date(let date):
             self = .datetime(date)
         case .bool(let value):
@@ -93,6 +98,9 @@ public extension BSON {
             self = .double(Double(float))
         case .double(let double):
             self = .double(double)
+        case .decimal(let decimal):
+            let bson = try BSONDecimal128(decimal.description)
+            self = .decimal128(bson)
         }
     }
 }

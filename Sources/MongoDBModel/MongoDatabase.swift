@@ -121,7 +121,7 @@ internal extension MongoDatabase {
     ) async throws {
         let entityName = value.entity
         let collection = self.collection(entityName, options: options)
-        let document = BSONDocument(model: value)
+        let document = try BSONDocument(model: value)
         try await collection.insertOne(document)
     }
     
@@ -135,7 +135,7 @@ internal extension MongoDatabase {
         }
         for (entity, values) in collections {
             let collection = self.collection(entity, options: options[entity])
-            let documents = values.map { BSONDocument(model: $0) }
+            let documents = try values.map { try BSONDocument(model: $0) }
             try await collection.insertMany(documents)
         }
     }
