@@ -46,15 +46,17 @@ public extension BSONDocument {
 
 public extension BSONDocument {
     
-    init?(predicate: Comparison) {
+    init?(predicate: FetchRequest.Predicate.Comparison) {
         // { <field>: { $eq: <value> } }
+        guard case let .keyPath(keyPath) = predicate.left,
+              let comparisonOperator = ComparisonQueryOperator(predicate: predicate.type),
+              case let .value(value) = predicate.right,
+              predicate.options.isEmpty,
+              predicate.modifier == nil,
+              let valueBSON = try? BSON(attributeValue: value) else {
             return nil
         }
-}
-
-public extension BSON {
-    
-    init?(predicate: Expression) {
-        return nil
+        self = [
+            keyPath.rawValue: .document([comparisonOperator.rawValue: valueBSON])]
     }
 }
