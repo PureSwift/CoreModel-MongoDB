@@ -7,12 +7,11 @@
 
 import Foundation
 import CoreModel
-import Predicate
 import MongoSwift
 
 public extension BSONDocument {
     
-    init?(predicate: Predicate) {
+    init?(predicate: FetchRequest.Predicate) {
         switch predicate {
         case .comparison(let comparison):
             self.init(predicate: comparison)
@@ -26,7 +25,7 @@ public extension BSONDocument {
 
 public extension BSONDocument {
     
-    init?(predicate: Compound) {
+    init?(predicate: FetchRequest.Predicate.Compound) {
         guard predicate.type != .not else {
             // { field: { $not: { <operator-expression> } } }
             return nil
@@ -49,8 +48,8 @@ public extension BSONDocument {
     
     init?(predicate: Comparison) {
         // { <field>: { $eq: <value> } }
-        return nil
-    }
+            return nil
+        }
 }
 
 public extension BSON {

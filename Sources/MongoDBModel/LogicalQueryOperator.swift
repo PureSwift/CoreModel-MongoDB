@@ -6,7 +6,6 @@
 //
 
 import Foundation
-import Predicate
 
 /// Logical Query Operators
 ///
@@ -32,7 +31,7 @@ public enum LogicalQueryOperator: String, Codable, CaseIterable {
 
 public extension LogicalQueryOperator {
     
-    init(predicate: Compound.Logical​Type) {
+    init(predicate: FetchRequest.Predicate.Compound.Logical​Type) {
         switch predicate {
         case .and:
             self = .and

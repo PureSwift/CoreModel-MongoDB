@@ -6,7 +6,6 @@
 //
 
 import Foundation
-import Predicate
 
 /// Comparison Query Operators
 ///
@@ -44,7 +43,7 @@ public enum ComparisonQueryOperator: String, Codable, CaseIterable {
 
 public extension ComparisonQueryOperator {
     
-    init?(predicate: Comparison.Operator) {
+    init?(predicate: FetchRequest.Predicate.Comparison.Operator) {
         switch predicate {
         case .equalTo:
             self = .equalTo
