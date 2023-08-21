@@ -7,17 +7,7 @@
 
 import Foundation
 import CoreModel
-import Predicate
 import MongoSwift
-
-public extension BSONDocument {
-    
-    init(filter predicate: Predicate) {
-        self.init()
-        // TODO:
-        assertionFailure("Not implemented")
-    }
-}
 
 public extension BSONDocument {
     

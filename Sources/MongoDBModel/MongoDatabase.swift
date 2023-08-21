@@ -108,7 +108,7 @@ internal extension MongoDatabase {
     ) async throws -> UInt {
         let entityName = fetchRequest.entity
         let collection = self.collection(entityName, options: options)
-        let filter = fetchRequest.predicate.map { BSONDocument(filter: $0) } ?? [:]
+        let filter = fetchRequest.predicate.flatMap { BSONDocument(predicate: $0) } ?? [:]
         let options = CountDocumentsOptions(fetchRequest: fetchRequest)
         let count = try await collection.countDocuments(filter, options: options)
         return UInt(count)
@@ -173,7 +173,7 @@ internal extension MongoDatabase {
     ) async throws -> [BSONDocument] {
         let entityName = fetchRequest.entity
         let collection = self.collection(entityName, options: options)
-        let filter = fetchRequest.predicate.map { BSONDocument(filter: $0) } ?? [:]
+        let filter = fetchRequest.predicate.flatMap { BSONDocument(predicate: $0) } ?? [:]
         let options = FindOptions(fetchRequest: fetchRequest)
         let stream = try await collection.find(filter, options: options)
         var results = [BSONDocument]()
