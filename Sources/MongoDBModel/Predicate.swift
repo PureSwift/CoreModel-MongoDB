@@ -50,11 +50,21 @@ public extension BSONDocument {
         // { <field>: { $eq: <value> } }
         guard case let .keyPath(keyPath) = predicate.left,
               let comparisonOperator = ComparisonQueryOperator(predicate: predicate.type),
-              case let .value(value) = predicate.right,
               predicate.options.isEmpty,
-              predicate.modifier == nil,
-              let valueBSON = try? BSON(attributeValue: value) else {
+              predicate.modifier == nil else {
             return nil
+        }
+        let valueBSON: BSON
+        switch predicate.right {
+        case .keyPath:
+            return nil
+        case let .attribute(value):
+            guard let bson = try? BSON(attributeValue: value) else {
+                return nil
+            }
+            valueBSON = bson
+        case let .relationship(value):
+            valueBSON = BSON(relationship: value)
         }
         self = [
             keyPath.rawValue: .document([comparisonOperator.rawValue: valueBSON])]
