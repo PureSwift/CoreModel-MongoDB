@@ -57,6 +57,11 @@ public struct MongoModelStorage: ModelStorage {
         try await database.delete(entity, for: id, options: options)
     }
     
+    public func fetchID(_ fetchRequest: FetchRequest) async throws -> [ObjectID] {
+        let options = options.collections[fetchRequest.entity]
+        return try await database.fetchIDs(fetchRequest, options: options)
+    }
+    
     private func model(for entityName: EntityName) throws -> EntityDescription {
         guard let entity = self.model.entities.first(where: { $0.id == entityName }) else {
             throw CoreModelError.invalidEntity(entityName)
@@ -179,6 +184,31 @@ internal extension MongoDatabase {
         var results = [BSONDocument]()
         for try await document in stream {
             results.append(document)
+        }
+        return results
+    }
+    
+    func fetchIDs(
+        _ fetchRequest: FetchRequest,
+        options: MongoCollectionOptions?
+    ) async throws -> [ObjectID] {
+        let idKey = BSONDocument.BuiltInProperty.id.rawValue
+        let entityName = fetchRequest.entity
+        let collection = self.collection(entityName, options: options)
+        let filter = fetchRequest.predicate.flatMap { BSONDocument(predicate: $0) } ?? [:]
+        var options = FindOptions(fetchRequest: fetchRequest)
+        options.projection = [
+            idKey: .int32(1)
+        ]
+        let stream = try await collection.find(filter, options: options)
+        var results = [ObjectID]()
+        for try await document in stream {
+            guard let id = document[idKey]?.stringValue else {
+                assertionFailure()
+                throw CocoaError(.coderReadCorrupt)
+            }
+            assert(document.values.count == 1)
+            results.append(ObjectID(rawValue: id))
         }
         return results
     }
