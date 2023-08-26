@@ -126,8 +126,17 @@ internal extension MongoDatabase {
     ) async throws {
         let entityName = value.entity
         let collection = self.collection(entityName, options: options)
+        let options: CountDocumentsOptions? = nil
+        let filter: BSONDocument = [
+            BSONDocument.BuiltInProperty.id.rawValue: .string(value.id.rawValue)
+        ]
+        let count = try await collection.countDocuments(filter, options: options)
         let document = try BSONDocument(model: value)
-        try await collection.insertOne(document)
+        if count > 0 {
+            try await collection.findOneAndUpdate(filter: filter, update: document)
+        } else {
+            try await collection.insertOne(document)
+        }
     }
     
     func insert(

@@ -68,14 +68,16 @@ final class MongoDBModelTests: XCTestCase {
             checkout: campground.officeHours
         )
         
-        // set relationship
-        campground.units = [rentalUnit.id]
-        
         var campgroundData = try campground.encode(log: { print("Encoder:", $0) })
         try await store.insert(campgroundData)
         let rentalUnitData = try rentalUnit.encode(log: { print("Encoder:", $0) })
         XCTAssertEqual(rentalUnitData.relationships[PropertyKey(Campground.RentalUnit.CodingKeys.campground)], .toOne(ObjectID(campground.id)))
         try await store.insert(rentalUnitData)
+        
+        // update value
+        campground.units = [rentalUnit.id]
+        try await store.insert(campground)
+        
         campgroundData = try await store.fetch(Campground.entityName, for: ObjectID(campground.id))!
         campground = try .init(from: campgroundData, log: { print("Decoder:", $0) })
         XCTAssertEqual(campground.units, [rentalUnit.id])
