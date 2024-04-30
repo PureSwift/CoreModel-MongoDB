@@ -187,7 +187,9 @@ internal extension MongoDatabase {
     ) async throws -> [BSONDocument] {
         let entityName = fetchRequest.entity
         let collection = self.collection(entityName, options: options)
-        let filter = fetchRequest.predicate.flatMap { BSONDocument(predicate: $0) } ?? [:]
+        guard let filter = fetchRequest.predicate.flatMap({ BSONDocument(predicate: $0) }) else {
+            throw CocoaError(.featureUnsupported)
+        }
         let options = FindOptions(fetchRequest: fetchRequest)
         let stream = try await collection.find(filter, options: options)
         var results = [BSONDocument]()
