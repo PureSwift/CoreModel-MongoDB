@@ -22,7 +22,7 @@ let package = Package(
         ),
         .package(
             url: "https://github.com/PureSwift/CoreModel",
-            branch: "master"
+            from: "2.4.3"
         )
     ],
     targets: [
