@@ -19,7 +19,9 @@ final class MongoDBModelTests: XCTestCase {
             cleanupMongoSwift()
 
             // shut down EventLoopGroup
-            try? elg.syncShutdownGracefully()
+            Task {
+                try? await elg.shutdownGracefully()
+            }
         }
         
         let model = Model(entities: Person.self, Event.self, Campground.self, Campground.RentalUnit.self)
