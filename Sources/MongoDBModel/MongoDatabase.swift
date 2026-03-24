@@ -1,9 +1,11 @@
 import Foundation
 @_exported import CoreModel
-@_exported import MongoSwift
+@_exported @preconcurrency import MongoSwift
 
-public struct MongoModelStorage: ModelStorage {
-    
+extension MongoCollectionOptions: @unchecked Sendable {}
+
+public actor MongoModelStorage: ModelStorage {
+        
     public let database: MongoDatabase
     
     public let model: Model
@@ -23,43 +25,49 @@ public struct MongoModelStorage: ModelStorage {
     /// Fetch managed object.
     public func fetch(_ entityName: EntityName, for id: ObjectID) async throws -> ModelData? {
         let entity = try model(for: entityName)
-        let options = options.collections[entity.id]
-        return try await database.fetch(entity, for: id, options: options)
+        let collectionOptions = options.collections[entity.id]
+        return try await database.fetch(entity, for: id, options: collectionOptions)
     }
     
     /// Fetch managed objects.
     public func fetch(_ fetchRequest: FetchRequest) async throws -> [ModelData] {
         let entity = try model(for: fetchRequest.entity)
-        let options = options.collections[entity.id]
-        return try await database.fetch(fetchRequest, entity: entity, options: options)
+        let collectionOptions = options.collections[entity.id]
+        return try await database.fetch(fetchRequest, entity: entity, options: collectionOptions)
     }
     
     /// Fetch and return result count.
     public func count(_ fetchRequest: FetchRequest) async throws -> UInt {
-        let options = options.collections[fetchRequest.entity]
-        return try await database.count(fetchRequest, options: options)
+        let collectionOptions = options.collections[fetchRequest.entity]
+        return try await database.count(fetchRequest, options: collectionOptions)
     }
     
     /// Create or edit a managed object.
     public func insert(_ value: ModelData) async throws {
-        let options = options.collections[value.entity]
-        try await database.insert(value, options: options)
+        let collectionOptions = options.collections[value.entity]
+        try await database.insert(value, options: collectionOptions)
     }
     
     /// Create or edit multiple managed objects.
     public func insert(_ values: [ModelData]) async throws {
-        try await database.insert(values, options: options.collections)
+        let collections = options.collections
+        try await database.insert(values, options: collections)
     }
     
     /// Delete the specified managed object.
     public func delete(_ entity: EntityName, for id: ObjectID) async throws {
-        let options = options.collections[entity]
-        try await database.delete(entity, for: id, options: options)
+        let collectionOptions = options.collections[entity]
+        try await database.delete(entity, for: id, options: collectionOptions)
+    }
+    
+    public func delete(_ entity: CoreModel.EntityName, for ids: [CoreModel.ObjectID]) async throws {
+        let collectionOptions = options.collections[entity]
+        try await database.delete(entity, for: ids, options: collectionOptions)
     }
     
     public func fetchID(_ fetchRequest: FetchRequest) async throws -> [ObjectID] {
-        let options = options.collections[fetchRequest.entity]
-        return try await database.fetchIDs(fetchRequest, options: options)
+        let collectionOptions = options.collections[fetchRequest.entity]
+        return try await database.fetchIDs(fetchRequest, options: collectionOptions)
     }
     
     private func model(for entityName: EntityName) throws -> EntityDescription {
@@ -72,9 +80,9 @@ public struct MongoModelStorage: ModelStorage {
 
 public extension MongoModelStorage {
     
-    struct Configuration {
+    struct Configuration: Sendable {
         
-        public var collections: [EntityName: MongoCollectionOptions]
+        public let collections: [EntityName: MongoCollectionOptions]
         
         public init(collections: [EntityName : MongoCollectionOptions] = [:]) {
             self.collections = collections
@@ -166,6 +174,19 @@ internal extension MongoDatabase {
             BSONDocument.BuiltInProperty.id.rawValue: .string(id.rawValue)
         ]
         try await collection.deleteOne(filter, options: options)
+    }
+    
+    /// Delete the specified managed object.
+    func delete(
+        _ entity: EntityName,
+        for ids: [ObjectID],
+        options: MongoCollectionOptions?
+    ) async throws {
+        let collection = self.collection(entity, options: options)
+        let filter: BSONDocument = [
+            BSONDocument.BuiltInProperty.id.rawValue: .array(ids.map({ .string($0.rawValue) }))
+        ]
+        try await collection.deleteMany(filter)
     }
         
     func find(
