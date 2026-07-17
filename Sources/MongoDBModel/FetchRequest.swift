@@ -14,7 +14,11 @@ public extension BSONDocument {
     init(sort sortDescriptors: [FetchRequest.SortDescriptor]) {
         self.init()
         for sort in sortDescriptors {
-            self[sort.property.rawValue] = sort.ascending ? 1 : -1
+            guard case let .property(property) = sort.term else {
+                // function sort terms are evaluated in memory
+                continue
+            }
+            self[property.rawValue] = sort.ascending ? 1 : -1
         }
     }
 }
