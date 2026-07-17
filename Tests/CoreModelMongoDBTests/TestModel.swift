@@ -276,7 +276,7 @@ extension Campground: Entity {
 public extension Campground {
     
     /// Campground Amenities
-    enum Amenity: String, Codable, CaseIterable {
+    enum Amenity: String, Codable, CaseIterable, Sendable {
         
         case water
         case amp30
@@ -333,7 +333,7 @@ extension Array: AttributeDecodable where Self.Element == Campground.Amenity  {
 public extension Campground {
     
     /// Location Coordinates
-    struct LocationCoordinates: Equatable, Hashable, Codable {
+    struct LocationCoordinates: Equatable, Hashable, Codable, Sendable {
         
         /// Latitude
         public var latitude: Double
@@ -374,7 +374,7 @@ extension Campground.LocationCoordinates: AttributeDecodable {
 public extension Campground {
     
     /// Schedule (e.g. Check in, Check Out)
-    struct Schedule: Equatable, Hashable, Codable {
+    struct Schedule: Equatable, Hashable, Codable, Sendable {
         
         public var start: UInt
         

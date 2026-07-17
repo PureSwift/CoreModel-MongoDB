@@ -7,16 +7,15 @@ jobs:
     name: Build
     strategy:
       matrix:
-        swift: [6.0.2, 6.1.2]
-        os: [ubuntu-20.04]
+        swift: ["6.3.3"]
+        os: [ubuntu-latest]
     runs-on: ${{ matrix.os }}
+    container: swift:${{ matrix.swift }}
     steps:
-    - name: Install Swift
-      uses: slashmo/install-swift@v0.3.0
-      with:
-        version: ${{ matrix.swift }}
     - name: Checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
+    - name: Install MongoDB C driver dependencies
+      run: apt-get update && apt-get install -y libssl-dev libsasl2-dev zlib1g-dev
     - name: Swift Version
       run: swift --version
     - name: Build (Debug)

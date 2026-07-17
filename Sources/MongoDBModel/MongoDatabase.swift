@@ -2,7 +2,8 @@ import Foundation
 @_exported import CoreModel
 @_exported @preconcurrency import MongoSwift
 
-extension MongoCollectionOptions: @unchecked Sendable {}
+extension MongoCollectionOptions: @unchecked @retroactive Sendable {}
+extension MongoDatabase: @unchecked @retroactive Sendable {}
 
 public actor MongoModelStorage: ModelStorage {
         
@@ -11,7 +12,9 @@ public actor MongoModelStorage: ModelStorage {
     public let model: Model
     
     public let options: Configuration
-    
+
+    private var registeredFunctions = [String: DatabaseFunction]()
+
     public init(
         database: MongoDatabase,
         model: Model,
@@ -33,13 +36,26 @@ public actor MongoModelStorage: ModelStorage {
     public func fetch(_ fetchRequest: FetchRequest) async throws -> [ModelData] {
         let entity = try model(for: fetchRequest.entity)
         let collectionOptions = options.collections[entity.id]
+        guard fetchRequest.requiresInMemoryEvaluation == false else {
+            return try await database.fetchInMemory(fetchRequest, entity: entity, options: collectionOptions, functions: registeredFunctions)
+        }
         return try await database.fetch(fetchRequest, entity: entity, options: collectionOptions)
     }
-    
+
     /// Fetch and return result count.
     public func count(_ fetchRequest: FetchRequest) async throws -> UInt {
         let collectionOptions = options.collections[fetchRequest.entity]
+        guard fetchRequest.requiresInMemoryEvaluation == false else {
+            let entity = try model(for: fetchRequest.entity)
+            let results = try await database.fetchInMemory(fetchRequest, entity: entity, options: collectionOptions, functions: registeredFunctions)
+            return UInt(results.count)
+        }
         return try await database.count(fetchRequest, options: collectionOptions)
+    }
+
+    /// Register a custom function for use in predicates and sort descriptors.
+    public func register(function: DatabaseFunction) {
+        registeredFunctions[function.name] = function
     }
     
     /// Create or edit a managed object.
@@ -67,6 +83,11 @@ public actor MongoModelStorage: ModelStorage {
     
     public func fetchID(_ fetchRequest: FetchRequest) async throws -> [ObjectID] {
         let collectionOptions = options.collections[fetchRequest.entity]
+        guard fetchRequest.requiresInMemoryEvaluation == false else {
+            let entity = try model(for: fetchRequest.entity)
+            let results = try await database.fetchInMemory(fetchRequest, entity: entity, options: collectionOptions, functions: registeredFunctions)
+            return results.map { $0.id }
+        }
         return try await database.fetchIDs(fetchRequest, options: collectionOptions)
     }
     
@@ -220,6 +241,39 @@ internal extension MongoDatabase {
         return results
     }
     
+    /// Fetch objects for a request that references custom functions, which MongoDB
+    /// cannot execute natively: fetch a native superset (function comparisons stripped
+    /// from the predicate), then filter, sort, and paginate in memory.
+    func fetchInMemory(
+        _ fetchRequest: FetchRequest,
+        entity: EntityDescription,
+        options: MongoCollectionOptions?,
+        functions: [String: DatabaseFunction]
+    ) async throws -> [ModelData] {
+        let collection = self.collection(fetchRequest.entity, options: options)
+        // a fetch-all superset is still correct if the stripped predicate is untranslatable,
+        // since the full predicate is re-applied in memory below
+        let filter = fetchRequest.predicate
+            .map { $0.strippingFunctionComparisons() }
+            .flatMap { BSONDocument(predicate: $0) } ?? [:]
+        let stream = try await collection.find(filter, options: nil)
+        var results = [ModelData]()
+        for try await document in stream {
+            results.append(try ModelData(bson: document, model: entity))
+        }
+        if let predicate = fetchRequest.predicate {
+            results = results.filter { predicate.evaluate(with: $0, functions: functions) }
+        }
+        results = results.sortedInMemory(by: fetchRequest.sortDescriptors, functions: functions)
+        if fetchRequest.fetchOffset > 0 {
+            results = Array(results.dropFirst(fetchRequest.fetchOffset))
+        }
+        if fetchRequest.fetchLimit > 0 {
+            results = Array(results.prefix(fetchRequest.fetchLimit))
+        }
+        return results
+    }
+
     func fetchIDs(
         _ fetchRequest: FetchRequest,
         options: MongoCollectionOptions?
