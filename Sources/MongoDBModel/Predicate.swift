@@ -56,7 +56,8 @@ public extension BSONDocument {
         }
         let valueBSON: BSON
         switch predicate.right {
-        case .keyPath:
+        case .keyPath, .function:
+            // custom functions cannot be executed by the server
             return nil
         case let .attribute(value):
             guard let bson = try? BSON(attributeValue: value) else {
