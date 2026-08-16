@@ -68,6 +68,9 @@ internal extension FetchRequest.Predicate.Expression {
         switch self {
         case .function:
             return true
+        case let .arithmetic(expression):
+            // an operand may itself be a function call
+            return expression.left.containsFunction || expression.right.containsFunction
         case .attribute, .relationship, .keyPath:
             return false
         }
@@ -125,7 +128,8 @@ internal extension FetchRequest.Predicate.Expression {
         case let .attribute(value):
             return value
         case let .keyPath(keyPath):
-            return data.attributes[PropertyKey(rawValue: keyPath.rawValue)]
+            // descends into composite attribute elements, e.g. `location.latitude`
+            return data.attributeValue(forKeyPath: keyPath)
         case let .function(function):
             guard let registered = functions[function.name] else {
                 return nil
@@ -134,6 +138,9 @@ internal extension FetchRequest.Predicate.Expression {
             return registered.evaluate(arguments)
         case .relationship:
             // relationships aren't compared by the in-memory function path
+            return nil
+        case .arithmetic:
+            // - TODO: Evaluate arithmetic expressions in the in-memory fallback.
             return nil
         }
     }
