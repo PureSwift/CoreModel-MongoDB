@@ -19,6 +19,13 @@ internal extension FetchRequest {
         if predicate?.containsFunction == true {
             return true
         }
+        // `$divide` aborts the whole query on division by zero and always produces
+        // floating point (no truncating integer division), and `$mod` diverges on
+        // floats — so division and remainder run in memory, where the semantics
+        // exactly match CoreModel's evaluation engine.
+        if predicate?.containsMemoryOnlyArithmetic == true {
+            return true
+        }
         return sortDescriptors.contains { descriptor in
             if case .function = descriptor.term { return true } else { return false }
         }
@@ -47,8 +54,9 @@ internal extension FetchRequest.Predicate {
         case .value:
             return self
         case let .comparison(comparison):
-            let usesFunction = comparison.left.containsFunction || comparison.right.containsFunction
-            return usesFunction ? .value(true) : self
+            let requiresMemory = comparison.left.containsFunction || comparison.right.containsFunction
+                || comparison.left.containsMemoryOnlyArithmetic || comparison.right.containsMemoryOnlyArithmetic
+            return requiresMemory ? .value(true) : self
         case let .compound(compound):
             switch compound {
             case let .and(subpredicates):
@@ -62,7 +70,38 @@ internal extension FetchRequest.Predicate {
     }
 }
 
+internal extension FetchRequest.Predicate {
+
+    /// Whether this predicate contains an arithmetic operation that must run in memory.
+    var containsMemoryOnlyArithmetic: Bool {
+        switch self {
+        case .value:
+            return false
+        case let .comparison(comparison):
+            return comparison.left.containsMemoryOnlyArithmetic || comparison.right.containsMemoryOnlyArithmetic
+        case let .compound(compound):
+            return compound.subpredicates.contains { $0.containsMemoryOnlyArithmetic }
+        }
+    }
+}
+
 internal extension FetchRequest.Predicate.Expression {
+
+    /// Whether this expression contains a division or remainder, which the server
+    /// cannot evaluate with CoreModel's semantics — see `requiresInMemoryEvaluation`.
+    var containsMemoryOnlyArithmetic: Bool {
+        switch self {
+        case let .arithmetic(expression):
+            if expression.function == .divide || expression.function == .modulus {
+                return true
+            }
+            return expression.left.containsMemoryOnlyArithmetic || expression.right.containsMemoryOnlyArithmetic
+        case let .function(function):
+            return function.arguments.contains { $0.containsMemoryOnlyArithmetic }
+        case .attribute, .relationship, .keyPath:
+            return false
+        }
+    }
 
     var containsFunction: Bool {
         switch self {
@@ -139,9 +178,10 @@ internal extension FetchRequest.Predicate.Expression {
         case .relationship:
             // relationships aren't compared by the in-memory function path
             return nil
-        case .arithmetic:
-            // - TODO: Evaluate arithmetic expressions in the in-memory fallback.
-            return nil
+        case let .arithmetic(arithmetic):
+            let lhs = arithmetic.left.evaluate(with: data, functions: functions)
+            let rhs = arithmetic.right.evaluate(with: data, functions: functions)
+            return AttributeValue.arithmetic(arithmetic.function, lhs, rhs)
         }
     }
 }
@@ -218,6 +258,56 @@ private extension AttributeValue {
     var stringValue: String? {
         if case let .string(value) = self { return value }
         return nil
+    }
+
+    /// An integer representation for integer value types, for integer arithmetic.
+    var integerValue: Int64? {
+        switch self {
+        case let .int16(value):     return Int64(value)
+        case let .int32(value):     return Int64(value)
+        case let .int64(value):     return value
+        default:                    return nil
+        }
+    }
+
+    /// Apply an arithmetic function to two values.
+    ///
+    /// Mirrors CoreModel's in-memory engine (which is internal to that module):
+    /// integer operands stay in integer arithmetic, so division truncates
+    /// (`7 / 2` is `3`); mixed or floating-point operands compute as `Double`.
+    /// Returns `nil` for non-numeric operands, division or remainder by zero,
+    /// an overflowing division, or a floating-point remainder.
+    static func arithmetic(
+        _ function: FetchRequest.Predicate.ArithmeticExpression.Function,
+        _ lhs: AttributeValue?,
+        _ rhs: AttributeValue?
+    ) -> AttributeValue? {
+        guard let lhs, let rhs else { return nil }
+        if let leftInteger = lhs.integerValue, let rightInteger = rhs.integerValue {
+            switch function {
+            case .add:      return .int64(leftInteger &+ rightInteger)
+            case .subtract: return .int64(leftInteger &- rightInteger)
+            case .multiply: return .int64(leftInteger &* rightInteger)
+            case .divide:
+                guard rightInteger != 0 else { return nil }
+                let (quotient, overflow) = leftInteger.dividedReportingOverflow(by: rightInteger)
+                return overflow ? nil : .int64(quotient)
+            case .modulus:
+                guard rightInteger != 0 else { return nil }
+                let (remainder, overflow) = leftInteger.remainderReportingOverflow(dividingBy: rightInteger)
+                return overflow ? nil : .int64(remainder)
+            }
+        }
+        guard let leftNumber = lhs.comparableDouble, let rightNumber = rhs.comparableDouble else {
+            return nil
+        }
+        switch function {
+        case .add:      return .double(leftNumber + rightNumber)
+        case .subtract: return .double(leftNumber - rightNumber)
+        case .multiply: return .double(leftNumber * rightNumber)
+        case .divide:   return rightNumber == 0 ? nil : .double(leftNumber / rightNumber)
+        case .modulus:  return nil // integers only
+        }
     }
 
     static func areEqual(_ lhs: AttributeValue?, _ rhs: AttributeValue?, caseInsensitive: Bool) -> Bool {

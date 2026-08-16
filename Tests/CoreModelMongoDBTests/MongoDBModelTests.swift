@@ -11,8 +11,10 @@ final class MongoDBModelTests: XCTestCase {
         let elg = MultiThreadedEventLoopGroup(numberOfThreads: 4)
         let client = try MongoClient("mongodb://localhost:27017", using: elg)
         let database = client.db("test")
-        try await database.drop()
         
+        // - Note: The defer must be registered before the first `await` that can
+        //   throw (e.g. no server listening), or the client deinitializes unclosed
+        //   and MongoSwift asserts, crashing the test process with SIGTRAP.
         defer {
             // clean up driver resources
             try? client.syncClose()
@@ -23,6 +25,8 @@ final class MongoDBModelTests: XCTestCase {
                 try? await elg.shutdownGracefully()
             }
         }
+        
+        try await database.drop()
         
         let model = Model(entities: Person.self, Event.self, Campground.self, Campground.RentalUnit.self)
         let store = MongoModelStorage(
