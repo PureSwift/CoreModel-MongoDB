@@ -62,6 +62,11 @@ internal extension AttributeValue {
                 return nil
             }
             self = .decimal(decimal)
+        case (.composite(let elements), .document(let document)):
+            guard let value = AttributeValue.composite(from: document, elements: elements) else {
+                return nil
+            }
+            self = value
         case (_, .null):
             self = .null
         default:
@@ -86,6 +91,9 @@ public extension BSON {
             self = .binary(try .init(data: data, subtype: .generic))
         case .date(let date):
             self = .datetime(date)
+        case .composite(let elements):
+            // a composite maps onto MongoDB's native embedded document
+            self = .document(try BSONDocument(compositeValue: elements))
         case .bool(let value):
             self = .bool(value)
         case .int16(let value):
